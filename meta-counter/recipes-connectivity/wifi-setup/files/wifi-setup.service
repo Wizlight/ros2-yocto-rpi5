@@ -1,0 +1,14 @@
+[Unit]
+Description=Configure Wi-Fi from SD boot partition
+RequiresMountsFor=/boot
+Wants=systemd-networkd.service
+After=systemd-networkd.service
+Before=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/wifi-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Yuna NCNN realtime detector
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/mkdir -p /tmp/livecam
+ExecStart=/usr/bin/yuna-live /usr/share/yuna-detector/model.ncnn.param /usr/share/yuna-detector/model.ncnn.bin
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=IMX219 camera capture for Yuna detector
+After=yuna-live.service
+Wants=yuna-live.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/mkdir -p /tmp/livecam
+ExecStart=/usr/bin/cam -c 1 --capture=1000000 --file=/tmp/livecam/frame-#.raw
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

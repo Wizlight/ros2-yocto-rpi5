@@ -17,6 +17,7 @@ add_layer() {
 
 add_layer "$ROOT_DIR/layers/meta-openembedded/meta-oe"
 add_layer "$ROOT_DIR/layers/meta-openembedded/meta-python"
+add_layer "$ROOT_DIR/layers/meta-openembedded/meta-multimedia"
 add_layer "$ROOT_DIR/layers/meta-raspberrypi"
 add_layer "$ROOT_DIR/layers/meta-ros/meta-ros-common"
 add_layer "$ROOT_DIR/layers/meta-ros/meta-ros2"
