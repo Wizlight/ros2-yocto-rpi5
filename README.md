@@ -1,512 +1,230 @@
-# ROS 2 Jazzy + Yocto for Raspberry Pi 5
+# Raspberry Pi 5 — YOLO / NCNN Object Detection on Yocto
 
-Custom Yocto Linux image for Raspberry Pi 5 with ROS 2 Jazzy and a simple publisher/subscriber example.
+This project runs a custom Object Detection model on Raspberry Pi 5 using a custom Yocto Linux image.
 
-This project demonstrates:
+The model was trained on my own dataset with photos of my cat, Yuna.
 
-- ROS 2 installation and official demo nodes on the development machine
-- a custom ROS 2 publisher and subscriber
-- communication through the `/counter` topic
-- inspection of ROS 2 nodes, topics and services
-- an optional service for pausing/resuming the counter
-- integration of ROS 2 Jazzy into a custom Yocto image
-- deployment and verification on Raspberry Pi 5
+## What was done
 
-## Hardware
+### Level 1
 
-- Raspberry Pi 5
-- microSD card
-- Ethernet connection
+- Created my own dataset with photos of Yuna.
+- Labeled 165 images.
+- Model class: `yuna`.
+- Dataset split:
+  - 120 images for training;
+  - 45 images for validation.
+- Trained the model using Ultralytics YOLO.
+- Tested the trained model on separate images and on live video.
 
-## Software
+Validation results:
 
-- Ubuntu 24.04 / WSL2
-- ROS 2 Jazzy
-- Yocto Project / Poky Scarthgap
-- meta-raspberrypi
-- meta-openembedded
-- meta-ros
-- Python 3 / rclpy
+- Precision: `0.951`
+- Recall: `0.973`
+- mAP50: `0.960`
+- mAP50-95: `0.839`
 
-## Repository structure
-
-```text
-ros2-yocto-rpi5/
-├── layers/
-│   ├── poky/
-│   ├── meta-openembedded/
-│   ├── meta-raspberrypi/
-│   └── meta-ros/
-├── meta-counter/
-│   ├── conf/
-│   │   └── layer.conf
-│   ├── recipes-core/
-│   │   └── images/
-│   │       └── ros2-counter-image.bb
-│   └── recipes-ros/
-│       └── counter-nodes/
-│           └── counter-nodes_0.0.1.bb
-├── ros2_ws/
-│   └── src/
-│       └── counter_nodes/
-│           ├── counter_nodes/
-│           │   ├── publisher.py
-│           │   └── subscriber.py
-│           ├── package.xml
-│           └── setup.py
-├── setup-build.sh
-└── README.md
-```
-
-External Yocto layers are included as Git submodules.
-
-## ROS 2 nodes
-
-The project contains two custom ROS 2 nodes.
-
-### Publisher
-
-`counter_publisher` publishes an incrementing integer once per second to:
-
-```text
-/counter
-```
-
-Message type:
-
-```text
-std_msgs/msg/Int32
-```
-
-Example output:
-
-```text
-Publishing: 1
-Publishing: 2
-Publishing: 3
-```
-
-### Subscriber
-
-`counter_subscriber` subscribes to `/counter` and prints every received value.
-
-Example output:
-
-```text
-Received: 1
-Received: 2
-Received: 3
-```
-
-## Optional service
-
-The publisher also provides:
-
-```text
-/counter/set_enabled
-```
-
-Service type:
-
-```text
-std_srvs/srv/SetBool
-```
-
-Pause publishing:
-
-```bash
-ros2 service call /counter/set_enabled std_srvs/srv/SetBool "{data: false}"
-```
-
-Resume publishing:
-
-```bash
-ros2 service call /counter/set_enabled std_srvs/srv/SetBool "{data: true}"
-```
-
-The node keeps running while publishing is paused.
+After training, the model was exported to NCNN format for inference on Raspberry Pi.
 
 ---
 
-## Running on the development machine
+## Level 2 — Yocto + Raspberry Pi 5
 
-ROS 2 Jazzy must be installed first.
+The model was integrated into a custom Yocto image for Raspberry Pi 5.
 
-Source ROS 2:
+The image includes:
 
-```bash
-source /opt/ros/jazzy/setup.bash
-```
+- NCNN;
+- Yuna detection model;
+- `libcamera`;
+- `libpisp`;
+- IMX219 camera support;
+- `yuna-live` detection application;
+- automatic camera startup;
+- automatic detector startup;
+- Wi-Fi configuration from the SD card boot partition.
 
-Verify the active distribution:
-
-```bash
-echo $ROS_DISTRO
-```
-
-Expected:
-
-```text
-jazzy
-```
-
-### Official ROS 2 demo
-
-Terminal 1:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-ros2 run demo_nodes_cpp talker
-```
-
-Terminal 2:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-ros2 run demo_nodes_cpp listener
-```
-
-### Build the custom package
-
-```bash
-cd ros2_ws
-source /opt/ros/jazzy/setup.bash
-colcon build --symlink-install
-source install/setup.bash
-```
-
-Run the publisher:
-
-```bash
-ros2 run counter_nodes counter_publisher
-```
-
-Run the subscriber in another terminal:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source ros2_ws/install/setup.bash
-ros2 run counter_nodes counter_subscriber
-```
-
-### Inspect ROS 2 communication
-
-```bash
-ros2 node list
-ros2 topic list
-ros2 topic info /counter
-ros2 topic echo /counter
-ros2 service list
-ros2 service type /counter/set_enabled
-```
-
-Expected nodes:
+System:
 
 ```text
-/counter_publisher
-/counter_subscriber
+Yocto / Poky 5.0.21
+Scarthgap
+Raspberry Pi 5
 ```
 
-Expected service type:
+Camera:
 
 ```text
-std_srvs/srv/SetBool
+Raspberry Pi IMX219 8MP
 ```
 
 ---
 
-# Yocto image
+## How it works
 
-The custom Yocto layer is:
-
-```text
-meta-counter
-```
-
-The image recipe is:
+After Raspberry Pi starts:
 
 ```text
-meta-counter/recipes-core/images/ros2-counter-image.bb
+IMX219 camera
+      ↓
+libcamera / cam
+      ↓
+RAW frames
+      ↓
+yuna-live
+      ↓
+NCNN model
+      ↓
+TCP :5000
+      ↓
+Windows viewer
 ```
 
-The image is based on `core-image-base` and adds:
+`yuna-live` performs inference directly on Raspberry Pi.
+
+The model is stored in:
 
 ```text
-ros-core
-counter-nodes
+/usr/share/yuna-detector/model.ncnn.param
+/usr/share/yuna-detector/model.ncnn.bin
 ```
 
-The resulting system contains:
+---
 
-- Yocto/Poky Scarthgap
-- ROS 2 Jazzy
-- systemd
-- Dropbear SSH
-- custom `counter_nodes` ROS 2 package
+## Automatic startup
 
-## Clone the repository
+After Raspberry Pi boots, these services start automatically:
 
-Clone with all Git submodules:
-
-```bash
-git clone --recurse-submodules https://github.com/Wizlight/ros2-yocto-rpi5.git
-cd ros2-yocto-rpi5
+```text
+yuna-live.service
+yuna-camera.service
+wifi-setup.service
 ```
 
-If the repository was cloned without submodules:
+They can be checked with:
 
 ```bash
-git submodule update --init --recursive
+systemctl status yuna-live.service
+systemctl status yuna-camera.service
+systemctl status wifi-setup.service
 ```
 
-## Configure the Yocto build
+---
 
-Run:
+## Wi-Fi
+
+The Wi-Fi SSID and password are not stored inside the Yocto image.
+
+After writing the image to the SD card, create this file in the root of the boot partition:
+
+```text
+wpa_supplicant.conf
+```
+
+Example:
+
+```ini
+country=UA
+
+network={
+    ssid="MyWiFi"
+    psk="MyPassword"
+}
+```
+
+On boot, Raspberry Pi reads this file and uses it to configure Wi-Fi.
+
+This makes it possible to change the Wi-Fi network without rebuilding the Yocto image.
+
+---
+
+## Building the Yocto image
+
+In WSL:
 
 ```bash
+cd ~/Projects/ros2-yocto-rpi5
 source setup-build.sh
 ```
 
-The script:
-
-- initializes the Yocto build directory
-- adds the required external layers
-- adds `meta-counter`
-- configures `raspberrypi5`
-- enables systemd
-- enables Dropbear SSH
-- limits build parallelism for WSL2
-- enables `rm_work` to reduce disk usage
-
-Important build settings:
-
-```text
-MACHINE = "raspberrypi5"
-INIT_MANAGER = "systemd"
-BB_NUMBER_THREADS = "6"
-PARALLEL_MAKE = "-j 4"
-INHERIT += "rm_work"
-```
-
-## Build the image
-
-After running `source setup-build.sh`:
+Build the image:
 
 ```bash
 bitbake ros2-counter-image
 ```
 
-The generated files are placed under:
+The generated files are located in:
 
 ```text
 build/tmp/deploy/images/raspberrypi5/
 ```
 
-The compressed disk image has a name similar to:
+The SD card image is:
 
 ```text
-ros2-counter-image-jazzy-raspberrypi5.rootfs-*.wic.bz2
+ros2-counter-image-jazzy-raspberrypi5.rootfs.wic.bz2
 ```
 
-> A clean Yocto + ROS 2 build can require a large amount of disk space. `rm_work` is enabled to keep temporary build data under control.
+It can be unpacked with:
+
+```bash
+bunzip2 -kc \
+  ros2-counter-image-jazzy-raspberrypi5.rootfs.wic.bz2 \
+  > ros2-counter-image-jazzy-raspberrypi5.img
+```
+
+The `.img` file can then be written to the SD card using Raspberry Pi Imager.
 
 ---
 
-# Flashing Raspberry Pi 5
+## Results
 
-The release image is compressed as `.wic.bz2`.
-
-Extract it:
-
-```bash
-bzip2 -dk ros2-counter-image-jazzy-rpi5.wic.bz2
-```
-
-This produces:
+The camera stream works at approximately:
 
 ```text
-ros2-counter-image-jazzy-rpi5.wic
+15 FPS
 ```
 
-Write the resulting image to a microSD card with Raspberry Pi Imager or another disk imaging tool.
+During testing, CPU usage of the `yuna-live` process changed depending on the current workload.
 
-Insert the microSD card into Raspberry Pi 5 and boot it.
+The highest CPU usage I observed during testing was approximately:
 
-The image includes Dropbear SSH.
-
-Connect with:
-
-```bash
-ssh root@<RPI_IP>
+```text
+68%
 ```
+
+Live Yuna detection was tested and recorded on video.
+
+The video shows:
+
+- live video from Raspberry Pi;
+- bounding box around Yuna;
+- detection confidence;
+- NCNN inference time;
+- FPS.
 
 ---
 
-# Verification on Raspberry Pi 5
+## Issue found during testing
 
-Verify the operating system:
+During testing, I found a problem with RAW frames.
 
-```bash
-cat /etc/os-release
-```
-
-Example from the tested image:
+When the Windows viewer was not connected, the camera continued writing frames to:
 
 ```text
-ID=poky
-NAME="Poky (Yocto Project Reference Distro)"
-VERSION="5.0.21 (scarthgap)"
-VERSION_ID=5.0.21
-VERSION_CODENAME="scarthgap"
+/tmp/livecam
 ```
 
-Load the ROS 2 environment:
+This caused `/tmp` to grow up to approximately `3.9 GB`.
 
-```sh
-. /opt/ros/jazzy/setup.sh
-```
+I updated `yuna-live` so that old frames are removed even when no viewer is connected.
 
-Verify ROS 2:
-
-```bash
-echo $ROS_DISTRO
-```
-
-Expected:
-
-```text
-jazzy
-```
-
-Verify that the custom package is installed:
-
-```bash
-ros2 pkg list | grep counter
-```
-
-Expected:
-
-```text
-counter_nodes
-```
-
-## Run the publisher
-
-SSH terminal 1:
-
-```sh
-. /opt/ros/jazzy/setup.sh
-ros2 run counter_nodes counter_publisher
-```
-
-Example:
-
-```text
-Publishing: 1
-Publishing: 2
-Publishing: 3
-```
-
-## Run the subscriber
-
-SSH terminal 2:
-
-```sh
-. /opt/ros/jazzy/setup.sh
-ros2 run counter_nodes counter_subscriber
-```
-
-Example:
-
-```text
-Received: 1
-Received: 2
-Received: 3
-```
-
-## Inspect nodes and topic
-
-SSH terminal 3:
-
-```sh
-. /opt/ros/jazzy/setup.sh
-ros2 node list
-ros2 topic list
-ros2 topic info /counter
-ros2 topic echo /counter
-```
-
-Expected nodes:
-
-```text
-/counter_publisher
-/counter_subscriber
-```
-
-Example topic output:
-
-```text
-data: 15
----
-data: 16
----
-data: 17
----
-```
-
-## Test the service
-
-```bash
-ros2 service list | grep counter
-```
-
-Expected:
-
-```text
-/counter/set_enabled
-```
-
-Pause publishing:
-
-```bash
-ros2 service call /counter/set_enabled std_srvs/srv/SetBool "{data: false}"
-```
-
-Resume publishing:
-
-```bash
-ros2 service call /counter/set_enabled std_srvs/srv/SetBool "{data: true}"
-```
+After the fix, `/tmp/livecam` keeps only a few recent frames and uses only a few MB.
 
 ---
 
-# Prebuilt image
+## Level 3
 
-A tested Raspberry Pi 5 image is available in GitHub Releases:
+Level 3 with separate ROS 2 nodes for Computer Vision was not implemented.
 
-https://github.com/Wizlight/ros2-yocto-rpi5/releases/tag/v1.0.0
-
-Release file:
-
-```text
-ros2-counter-image-jazzy-rpi5.wic.bz2
-```
-
-SHA-256:
-
-```text
-f8fe98dd2ce72984d9b7a0bc82bc200a382b7796d483a24bb5cfb6dc2f7a7c83
-```
-
-The image was tested on Raspberry Pi 5 with:
-
-- ROS 2 Jazzy
-- `counter_publisher`
-- `counter_subscriber`
-- `/counter` topic communication
-- `/counter/set_enabled` service
-- SSH access through Dropbear
-
-## License
-
-MIT
+This project includes Level 1 and Level 2.
